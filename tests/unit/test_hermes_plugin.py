@@ -149,6 +149,22 @@ def test_unrelated_missing_module_is_not_misreported(monkeypatch: pytest.MonkeyP
     assert out["type"] == "ModuleNotFoundError"
 
 
+def test_missing_submodule_is_not_reported_as_not_installed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A partial/broken install (missing submodule) must not read as 'not installed'."""
+
+    def boom(*_a, **_k):  # noqa: ANN002, ANN003, ANN202
+        raise ModuleNotFoundError(
+            "No module named 'skillspector.mcp_server'", name="skillspector.mcp_server"
+        )
+
+    monkeypatch.setattr(tools, "_run_scan_sync", boom)
+    out = json.loads(tools.skillspector_scan({"target": "x"}))
+    assert "not installed" not in out["error"].lower()
+    assert out["type"] == "ModuleNotFoundError"
+
+
 def test_arbitrary_scan_failure_returns_json_not_raise(monkeypatch: pytest.MonkeyPatch) -> None:
     def boom(*_a, **_k):  # noqa: ANN002, ANN003, ANN202
         raise RuntimeError("scan exploded")
@@ -178,6 +194,47 @@ def test_provider_enum_is_limited_to_credential_backed_providers() -> None:
     assert set(enum) == {"openai", "anthropic", "anthropic_proxy", "nv_build", "nv_inference"}
     for excluded in ("bedrock", "claude_cli", "codex_cli", "gemini_cli", "antigravity_cli"):
         assert excluded not in enum
+
+
+def test_llm_scan_holds_lock_even_without_overrides(monkeypatch: pytest.MonkeyPatch) -> None:
+    """An LLM-requested scan must serialize on _ENV_LOCK even with no override.
+
+    Otherwise a concurrent call reading the ambient SKILLSPECTOR_PROVIDER/MODEL
+    could observe another call's temporary override.
+    """
+    held: dict[str, bool] = {}
+
+    def fake_run(target, *, use_llm, output_format, yara_rules_dir):  # noqa: ANN001, ANN202
+        # If the lock is held by this call, a non-blocking acquire fails.
+        got = tools._ENV_LOCK.acquire(blocking=False)
+        held["during_scan"] = not got
+        if got:
+            tools._ENV_LOCK.release()
+        return {"target": target, "risk_score": 0}
+
+    monkeypatch.setattr(tools, "_run_scan_sync", fake_run)
+    # use_llm=True, no provider/model override.
+    json.loads(tools.skillspector_scan({"target": "x", "use_llm": True}))
+    assert held["during_scan"] is True
+    # And the lock is free again afterwards.
+    assert tools._ENV_LOCK.acquire(blocking=False) is True
+    tools._ENV_LOCK.release()
+
+
+def test_static_scan_does_not_hold_lock(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A static scan (use_llm=false) must not serialize on _ENV_LOCK."""
+    held: dict[str, bool] = {}
+
+    def fake_run(target, *, use_llm, output_format, yara_rules_dir):  # noqa: ANN001, ANN202
+        got = tools._ENV_LOCK.acquire(blocking=False)
+        held["during_scan"] = not got
+        if got:
+            tools._ENV_LOCK.release()
+        return {"target": target, "risk_score": 0}
+
+    monkeypatch.setattr(tools, "_run_scan_sync", fake_run)
+    json.loads(tools.skillspector_scan({"target": "x", "use_llm": False}))
+    assert held["during_scan"] is False
 
 
 def test_override_lock_is_released_between_calls(monkeypatch: pytest.MonkeyPatch) -> None:

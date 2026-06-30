@@ -36,9 +36,10 @@ from typing import Any
 _VALID_FORMATS = ("json", "markdown", "sarif", "terminal")
 
 # Provider/model selection is plumbed through process-global env vars that
-# SkillSpector's core reads, so concurrent handler invocations applying
-# different overrides would race. Serialize the (mutate env → scan → restore)
-# critical section so one call's override can never leak into another's scan.
+# SkillSpector's core reads at scan time. Any LLM-requested scan therefore reads
+# shared state, so concurrent invocations could leak one call's provider/model
+# into another's scan. Serialize every LLM-requested scan (not just ones that
+# apply an override) so a reader can never observe another call's mutation.
 _ENV_LOCK = threading.Lock()
 
 
@@ -95,11 +96,13 @@ def skillspector_scan(args: dict, **kwargs) -> str:
         return json.dumps({"error": "`yara_rules_dir` must be a string path."})
 
     # Provider/model selection is resolved by SkillSpector from the environment.
-    # Apply per-call overrides only when an LLM pass is actually requested, and
-    # only then take the env lock — static scans stay fully concurrent.
+    # Hold the env lock for the whole scan whenever the LLM pass is requested:
+    # the scan reads SKILLSPECTOR_PROVIDER/MODEL even when this call passes no
+    # override, so a concurrent override elsewhere would otherwise leak in.
+    # Static scans (use_llm=false) don't depend on these and stay concurrent.
     saved_env: dict[str, str | None] = {}
     lock_held = False
-    if use_llm and (provider or model):
+    if use_llm:
         _ENV_LOCK.acquire()
         lock_held = True
         if provider:
@@ -118,13 +121,12 @@ def skillspector_scan(args: dict, **kwargs) -> str:
         )
         return json.dumps(verdict, default=str)
     except Exception as exc:  # noqa: BLE001 — contract: never raise, return JSON
-        # Special-case only a missing `skillspector` package as "not installed";
-        # an unrelated missing dependency must not be misreported as that, so it
-        # falls through to the generic error below (still never raising).
-        if (
-            isinstance(exc, ModuleNotFoundError)
-            and (exc.name or "").split(".")[0] == "skillspector"
-        ):
+        # Special-case only the top-level `skillspector` package being absent as
+        # "not installed". A missing *submodule* (exc.name like
+        # "skillspector.mcp_server") signals a partial/broken or version-mismatched
+        # install, and an unrelated missing dependency is different again — both
+        # fall through to the generic error below with their real detail.
+        if isinstance(exc, ModuleNotFoundError) and exc.name == "skillspector":
             return json.dumps(
                 {
                     "error": (
