@@ -130,6 +130,16 @@ def skillspector_scan(args: object, **_kwargs: object) -> str:
             output_format=output_format,
             yara_rules_dir=yara_rules_dir,
         )
+        # The scan core is typed to return a verdict object; guard the trust
+        # boundary so a malformed core response surfaces as a clear error rather
+        # than a passthrough that breaks callers expecting risk_score/etc.
+        if not isinstance(verdict, dict):
+            return json.dumps(
+                {
+                    "error": "SkillSpector returned an unexpected (non-object) scan result.",
+                    "type": type(verdict).__name__,
+                }
+            )
         return json.dumps(verdict, default=str)
     except Exception as exc:  # noqa: BLE001 — contract: never raise, return JSON
         # Special-case only the top-level `skillspector` package being absent as

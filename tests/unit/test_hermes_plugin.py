@@ -172,6 +172,20 @@ def test_missing_submodule_is_not_reported_as_not_installed(
     assert out["type"] == "ModuleNotFoundError"
 
 
+@pytest.mark.parametrize("bad_result", [["a"], "json-string", 42, None])
+def test_non_object_scan_result_returns_error(
+    monkeypatch: pytest.MonkeyPatch, bad_result: object
+) -> None:
+    """A non-object core result must surface as an error, not pass through."""
+
+    def fake_run(target, *, use_llm, output_format, yara_rules_dir):  # noqa: ANN001, ANN202
+        return bad_result
+
+    monkeypatch.setattr(tools, "_run_scan_sync", fake_run)
+    out = json.loads(tools.skillspector_scan({"target": "x"}))
+    assert "unexpected" in out["error"].lower()
+
+
 def test_arbitrary_scan_failure_returns_json_not_raise(monkeypatch: pytest.MonkeyPatch) -> None:
     def boom(*_a, **_k):  # noqa: ANN002, ANN003, ANN202
         raise RuntimeError("scan exploded")
