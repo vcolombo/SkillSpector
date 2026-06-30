@@ -10,13 +10,28 @@ provides_tools:
 optional_env:
   - name: SKILLSPECTOR_PROVIDER
     description: >-
-      LLM provider for the optional semantic pass (openai, anthropic,
-      anthropic_proxy, nv_build, nv_inference). Static analysis runs without it.
+      LLM provider for the optional semantic pass: openai, anthropic,
+      anthropic_proxy, bedrock, nv_build, nv_inference, or a local CLI provider
+      (claude_cli, codex_cli, gemini_cli). Static analysis runs without it.
   - name: SKILLSPECTOR_MODEL
     description: Optional model override for the selected provider.
-  - name: ANTHROPIC_API_KEY
-    description: API key used when SKILLSPECTOR_PROVIDER=anthropic and use_llm=true.
-    secret: true
   - name: OPENAI_API_KEY
     description: API key used when SKILLSPECTOR_PROVIDER=openai and use_llm=true.
     secret: true
+  - name: ANTHROPIC_API_KEY
+    description: API key used when SKILLSPECTOR_PROVIDER=anthropic and use_llm=true.
+    secret: true
+  - name: ANTHROPIC_PROXY_API_KEY
+    description: API key used when SKILLSPECTOR_PROVIDER=anthropic_proxy and use_llm=true.
+    secret: true
+  - name: ANTHROPIC_PROXY_ENDPOINT_URL
+    description: Endpoint URL for the anthropic_proxy provider.
+  - name: NVIDIA_INFERENCE_KEY
+    description: >-
+      API key used when SKILLSPECTOR_PROVIDER=nv_build or nv_inference and
+      use_llm=true.
+    secret: true
+  - name: AWS_REGION
+    description: AWS region for the bedrock provider (defaults to us-west-2).
+  - name: AWS_PROFILE
+    description: Named AWS profile for the bedrock provider's SigV4 credentials.

@@ -52,10 +52,26 @@ SKILLSPECTOR_SCAN = {
             },
             "provider": {
                 "type": "string",
-                "enum": ["openai", "anthropic", "anthropic_proxy", "nv_build", "nv_inference"],
+                # Mirrors SKILLSPECTOR_PROVIDER values accepted by
+                # skillspector.providers._select_active_provider (the source of
+                # truth). Unknown values are still rejected by the core at scan
+                # time, so this enum is advisory rather than the only gate.
+                "enum": [
+                    "openai",
+                    "anthropic",
+                    "anthropic_proxy",
+                    "bedrock",
+                    "nv_build",
+                    "nv_inference",
+                    "claude_cli",
+                    "codex_cli",
+                    "gemini_cli",
+                ],
                 "description": (
                     "Optional LLM provider, used only when use_llm is true. "
-                    "Overrides SKILLSPECTOR_PROVIDER for this scan."
+                    "Overrides SKILLSPECTOR_PROVIDER for this scan. CLI providers "
+                    "(claude_cli, codex_cli, gemini_cli) use a local agent binary "
+                    "and need no API key."
                 ),
             },
             "model": {

@@ -33,10 +33,11 @@ import os
 from typing import Any
 
 _VALID_FORMATS = ("json", "markdown", "sarif", "terminal")
-_VALID_PROVIDERS = ("openai", "anthropic", "anthropic_proxy", "nv_build", "nv_inference")
 
 
-def _run_scan_sync(target: str, *, use_llm: bool, output_format: str, yara_rules_dir: str | None) -> dict[str, Any]:
+def _run_scan_sync(
+    target: str, *, use_llm: bool, output_format: str, yara_rules_dir: str | None
+) -> dict[str, Any]:
     """Invoke the async SkillSpector scan core from a synchronous handler."""
     from skillspector.mcp_server import run_scan
 
@@ -59,16 +60,28 @@ def skillspector_scan(args: dict, **kwargs) -> str:
     output_format = args.get("output_format", "json")
     if output_format not in _VALID_FORMATS:
         return json.dumps(
-            {"error": f"`output_format` must be one of {list(_VALID_FORMATS)}, got {output_format!r}."}
+            {
+                "error": f"`output_format` must be one of {list(_VALID_FORMATS)}, got {output_format!r}."
+            }
         )
 
-    use_llm = bool(args.get("use_llm", False))
+    # Validate the actual type rather than coercing: bool("false") is True, so
+    # a string slipping through here could silently enable the LLM pass.
+    use_llm_arg = args.get("use_llm", False)
+    if not isinstance(use_llm_arg, bool):
+        return json.dumps({"error": "`use_llm` must be a boolean."})
+    use_llm = use_llm_arg
 
     provider = args.get("provider")
-    if provider is not None and provider not in _VALID_PROVIDERS:
-        return json.dumps(
-            {"error": f"`provider` must be one of {list(_VALID_PROVIDERS)}, got {provider!r}."}
-        )
+    if provider is not None and not isinstance(provider, str):
+        return json.dumps({"error": "`provider` must be a string."})
+    # The set of valid providers is owned by SkillSpector's core, which raises a
+    # clear error for unknown values (surfaced below as a JSON error). We do not
+    # duplicate that whitelist here to avoid drifting out of sync with it.
+
+    model = args.get("model")
+    if model is not None and not isinstance(model, str):
+        return json.dumps({"error": "`model` must be a string."})
 
     yara_rules_dir = args.get("yara_rules_dir")
     if yara_rules_dir is not None and not isinstance(yara_rules_dir, str):
@@ -81,10 +94,9 @@ def skillspector_scan(args: dict, **kwargs) -> str:
         if provider:
             saved_env["SKILLSPECTOR_PROVIDER"] = os.environ.get("SKILLSPECTOR_PROVIDER")
             os.environ["SKILLSPECTOR_PROVIDER"] = provider
-        model = args.get("model")
         if model:
             saved_env["SKILLSPECTOR_MODEL"] = os.environ.get("SKILLSPECTOR_MODEL")
-            os.environ["SKILLSPECTOR_MODEL"] = str(model)
+            os.environ["SKILLSPECTOR_MODEL"] = model
 
     try:
         verdict = _run_scan_sync(
@@ -94,17 +106,23 @@ def skillspector_scan(args: dict, **kwargs) -> str:
             yara_rules_dir=yara_rules_dir,
         )
         return json.dumps(verdict, default=str)
-    except ModuleNotFoundError as exc:
-        return json.dumps(
-            {
-                "error": (
-                    "SkillSpector is not installed in the Hermes environment. "
-                    "Install it with: pip install skillspector"
-                ),
-                "detail": str(exc),
-            }
-        )
     except Exception as exc:  # noqa: BLE001 — contract: never raise, return JSON
+        # Special-case only a missing `skillspector` package as "not installed";
+        # an unrelated missing dependency must not be misreported as that, so it
+        # falls through to the generic error below (still never raising).
+        if (
+            isinstance(exc, ModuleNotFoundError)
+            and (exc.name or "").split(".")[0] == "skillspector"
+        ):
+            return json.dumps(
+                {
+                    "error": (
+                        "SkillSpector is not installed in the Hermes environment. "
+                        "Install it with: pip install skillspector"
+                    ),
+                    "detail": str(exc),
+                }
+            )
         return json.dumps({"error": str(exc), "type": type(exc).__name__})
     finally:
         for key, prior in saved_env.items():
