@@ -15,6 +15,7 @@ SkillSpector helps you answer: **"Is this skill safe to install?"**
 
 - **[Development guide](docs/DEVELOPMENT.md)** — Architecture, package layout, and how to extend the analyzer pipeline.
 - **[Pi extension](docs/PI_EXTENSION.md)** — Install SkillSpector as a Pi tool for scanning skills from inside agent sessions.
+- **[Hermes plugin](docs/HERMES_PLUGIN.md)** — Bundle SkillSpector as a Hermes Agent plugin to vet and gate skill/MCP installs from inside agent sessions.
 
 ## Features
 

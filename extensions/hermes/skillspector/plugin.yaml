@@ -1,0 +1,22 @@
+name: skillspector
+version: 2.3.7
+description: >-
+  Security scanner for AI agent skills. Scan a skill, MCP server, Git repo, URL,
+  zip, or local directory for vulnerabilities and malicious patterns before
+  installing or trusting it, and gate installs on the returned risk verdict.
+author: NVIDIA
+provides_tools:
+  - skillspector_scan
+optional_env:
+  - name: SKILLSPECTOR_PROVIDER
+    description: >-
+      LLM provider for the optional semantic pass (openai, anthropic,
+      anthropic_proxy, nv_build, nv_inference). Static analysis runs without it.
+  - name: SKILLSPECTOR_MODEL
+    description: Optional model override for the selected provider.
+  - name: ANTHROPIC_API_KEY
+    description: API key used when SKILLSPECTOR_PROVIDER=anthropic and use_llm=true.
+    secret: true
+  - name: OPENAI_API_KEY
+    description: API key used when SKILLSPECTOR_PROVIDER=openai and use_llm=true.
+    secret: true
