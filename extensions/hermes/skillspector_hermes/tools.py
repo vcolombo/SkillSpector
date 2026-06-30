@@ -59,8 +59,14 @@ def _run_scan_sync(
     )
 
 
-def skillspector_scan(args: dict, **kwargs) -> str:
-    """Scan a target for security risks and return a JSON verdict string."""
+def skillspector_scan(args: object, **_kwargs: object) -> str:
+    """Scan a target for security risks and return a JSON verdict string.
+
+    ``args`` is typed ``object`` rather than ``dict`` because the never-raise
+    contract means it must defensively accept any payload; it is narrowed to a
+    mapping right below. ``_kwargs`` is required by the Hermes handler contract
+    for forward compatibility but is currently unused.
+    """
     # Honour the never-raise contract even if a caller passes a non-object
     # payload (None, list, ...) — args.get below would otherwise AttributeError.
     if not isinstance(args, dict):

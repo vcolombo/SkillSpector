@@ -13,6 +13,9 @@ not reimplement scanning.
 
 - Hermes Agent installed.
 - Python `>=3.12,<3.15`.
+- This repository checked out locally — the plugin directory
+  (`extensions/hermes/skillspector_hermes/`) ships here and is copied into your
+  Hermes plugins directory below.
 - SkillSpector installed in the **same** Python environment Hermes runs in:
 
   ```bash
