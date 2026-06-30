@@ -61,6 +61,11 @@ def _run_scan_sync(
 
 def skillspector_scan(args: dict, **kwargs) -> str:
     """Scan a target for security risks and return a JSON verdict string."""
+    # Honour the never-raise contract even if a caller passes a non-object
+    # payload (None, list, ...) — args.get below would otherwise AttributeError.
+    if not isinstance(args, dict):
+        return json.dumps({"error": "`args` must be an object."})
+
     target = args.get("target")
     if not target or not isinstance(target, str):
         return json.dumps({"error": "`target` is required and must be a string."})

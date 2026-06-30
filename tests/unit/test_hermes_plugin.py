@@ -61,6 +61,13 @@ def test_non_string_target_returns_json_error() -> None:
     assert "error" in out
 
 
+@pytest.mark.parametrize("bad_args", [None, [], "target", 42])
+def test_non_dict_args_returns_json_error_never_raises(bad_args: object) -> None:
+    # The handler must honour the never-raise contract for any payload shape.
+    out = json.loads(tools.skillspector_scan(bad_args))
+    assert out == {"error": "`args` must be an object."}
+
+
 def test_invalid_output_format_returns_json_error() -> None:
     out = json.loads(tools.skillspector_scan({"target": "x", "output_format": "xml"}))
     assert "error" in out and "output_format" in out["error"]

@@ -21,6 +21,12 @@ optional_env:
   - name: OPENAI_API_KEY
     description: API key used when SKILLSPECTOR_PROVIDER=openai and use_llm=true.
     secret: true
+  - name: OPENAI_BASE_URL
+    description: >-
+      Override the OpenAI base URL to target an OpenAI-compatible endpoint when
+      SKILLSPECTOR_PROVIDER=openai.
+  - name: OPENAI_PROJECT_ID
+    description: Optional OpenAI project id when SKILLSPECTOR_PROVIDER=openai.
   - name: ANTHROPIC_API_KEY
     description: API key used when SKILLSPECTOR_PROVIDER=anthropic and use_llm=true.
     secret: true
