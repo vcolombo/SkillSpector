@@ -26,9 +26,13 @@ Copy the bundled plugin directory into your Hermes plugins directory:
 
 ```bash
 mkdir -p ~/.hermes/plugins
-cp -r extensions/hermes/skillspector ~/.hermes/plugins/skillspector
-hermes plugins enable skillspector
+cp -r extensions/hermes/skillspector_hermes ~/.hermes/plugins/skillspector_hermes
+hermes plugins enable skillspector_hermes
 ```
+
+> The plugin package is named `skillspector_hermes` (not `skillspector`) so it
+> cannot shadow the installed `skillspector` distribution it imports at scan
+> time. The tool it exposes is still `skillspector_scan`.
 
 Verify discovery (set `HERMES_PLUGINS_DEBUG=1` for verbose logging):
 
@@ -105,6 +109,6 @@ as `{"error": ...}`, per the Hermes handler contract.
 ## Remove
 
 ```bash
-hermes plugins disable skillspector
-rm -rf ~/.hermes/plugins/skillspector
+hermes plugins disable skillspector_hermes
+rm -rf ~/.hermes/plugins/skillspector_hermes
 ```

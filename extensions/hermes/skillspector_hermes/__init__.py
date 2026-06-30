@@ -18,6 +18,13 @@
 Registers the ``skillspector_scan`` tool under the ``skillspector`` toolset so
 a Hermes agent can vet a skill, MCP server, or repository and gate installs on
 the returned risk verdict.
+
+The package is named ``skillspector_hermes`` rather than ``skillspector`` on
+purpose: Hermes imports a plugin by its directory name, and a package named
+``skillspector`` would shadow the installed ``skillspector`` distribution that
+:mod:`tools` imports at scan time (``from skillspector.mcp_server import
+run_scan``), breaking every scan. The ``skillspector`` *toolset* below is just a
+display namespace and does not collide.
 """
 
 from . import schemas, tools

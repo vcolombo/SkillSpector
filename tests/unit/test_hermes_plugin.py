@@ -16,26 +16,27 @@
 """Tests for the Hermes Agent plugin handler.
 
 The plugin lives outside the importable ``skillspector`` package (under
-``extensions/hermes/skillspector/``) and is named ``skillspector`` itself, so it
-is loaded here by file path under a unique module name to avoid shadowing the
-real package. These tests cover the handler layer's own logic — argument
-validation, env-override save/restore, and the "always return JSON, never raise"
-contract — not the scan core (covered by ``test_mcp_server.py``).
+``extensions/hermes/skillspector_hermes/``). Its ``tools.py`` is loaded here by
+file path under a unique module name so these tests don't depend on Hermes's
+loader. They cover the handler layer's own logic — argument validation,
+env-override save/restore, and the "always return JSON, never raise" contract —
+not the scan core (covered by ``test_mcp_server.py``).
 """
 
 from __future__ import annotations
 
+import importlib
 import importlib.util
 import json
 import os
+import sys
 from pathlib import Path
 from types import ModuleType
 
 import pytest
 
-_PLUGIN_TOOLS = (
-    Path(__file__).resolve().parents[2] / "extensions" / "hermes" / "skillspector" / "tools.py"
-)
+_PLUGIN_DIR = Path(__file__).resolve().parents[2] / "extensions" / "hermes"
+_PLUGIN_TOOLS = _PLUGIN_DIR / "skillspector_hermes" / "tools.py"
 
 
 def _load_tools() -> ModuleType:
@@ -163,3 +164,48 @@ def test_static_scan_against_safe_fixture_is_clean() -> None:
     assert out["risk_score"] == 0
     assert out["safe_to_install"] is True
     assert out["scan_mode"] == "static-only"
+
+
+def test_plugin_import_by_name_does_not_shadow_skillspector() -> None:
+    """Importing the plugin the way Hermes does must not shadow the real package.
+
+    The plugin package is deliberately named ``skillspector_hermes`` (not
+    ``skillspector``). This reproduces Hermes's discovery — prepend the plugins
+    directory to ``sys.path`` and import the package by name — and asserts that
+    the installed ``skillspector`` distribution (and its ``mcp_server``) is still
+    importable, so the lazy ``from skillspector.mcp_server import run_scan`` the
+    handler relies on keeps working.
+    """
+    for name in ("skillspector_hermes", "skillspector_hermes.tools", "skillspector_hermes.schemas"):
+        sys.modules.pop(name, None)
+    sys.path.insert(0, str(_PLUGIN_DIR))
+    try:
+        plugin = importlib.import_module("skillspector_hermes")
+
+        # The real distribution is untouched: skillspector resolves to src, not
+        # the plugin directory, and its mcp_server (which run_scan lives in) loads.
+        import skillspector
+        from skillspector import mcp_server
+
+        assert "extensions/hermes" not in str(Path(skillspector.__file__).resolve())
+        assert hasattr(mcp_server, "run_scan")
+
+        # register() wires skillspector_scan onto a Hermes-style context.
+        registered: dict[str, object] = {}
+
+        class _Ctx:
+            def register_tool(self, **kwargs: object) -> None:
+                registered.update(kwargs)
+
+        plugin.register(_Ctx())
+        assert registered["name"] == "skillspector_scan"
+        assert registered["toolset"] == "skillspector"
+        assert callable(registered["handler"])
+    finally:
+        sys.path.remove(str(_PLUGIN_DIR))
+        for name in (
+            "skillspector_hermes",
+            "skillspector_hermes.tools",
+            "skillspector_hermes.schemas",
+        ):
+            sys.modules.pop(name, None)

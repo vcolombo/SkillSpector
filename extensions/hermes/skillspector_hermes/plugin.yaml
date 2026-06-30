@@ -1,4 +1,6 @@
-name: skillspector
+# Named skillspector_hermes (not skillspector) so the plugin package can never
+# shadow the installed `skillspector` distribution it imports at scan time.
+name: skillspector_hermes
 version: 2.3.7
 description: >-
   Security scanner for AI agent skills. Scan a skill, MCP server, Git repo, URL,

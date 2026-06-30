@@ -52,10 +52,11 @@ SKILLSPECTOR_SCAN = {
             },
             "provider": {
                 "type": "string",
-                # Mirrors SKILLSPECTOR_PROVIDER values accepted by
-                # skillspector.providers._select_active_provider (the source of
-                # truth). Unknown values are still rejected by the core at scan
-                # time, so this enum is advisory rather than the only gate.
+                # A curated subset of the SKILLSPECTOR_PROVIDER values accepted
+                # by skillspector.providers._select_active_provider. antigravity_cli
+                # is intentionally omitted (it is registered but disabled). This
+                # enum is advisory: the core validates the value at scan time and
+                # rejects anything it does not recognise.
                 "enum": [
                     "openai",
                     "anthropic",
