@@ -80,9 +80,11 @@ a clean full scan.
 - `output_format`: `json`, `markdown`, `sarif`, or `terminal`. Default `json`.
 - `yara_rules_dir`: optional directory of additional YARA rules.
 - `provider`: optional LLM provider (`openai`, `anthropic`, `anthropic_proxy`,
-  `bedrock`, `nv_build`, `nv_inference`, or a local CLI provider `claude_cli`,
-  `codex_cli`, `gemini_cli`), used only when `use_llm` is true. Unknown values
-  are rejected by SkillSpector's core at scan time and returned as a JSON error.
+  `nv_build`, or `nv_inference`), used only when `use_llm` is true. The list is
+  limited to providers whose API-key credentials enable the semantic pass
+  through this plugin's scan core (`run_scan`); `bedrock` and the CLI providers
+  resolve no credentials there, so they can't turn on the LLM pass. Unknown
+  values are rejected by SkillSpector's core at scan time as a JSON error.
 - `model`: optional model override, used only when `use_llm` is true.
 
 ## LLM-backed analysis

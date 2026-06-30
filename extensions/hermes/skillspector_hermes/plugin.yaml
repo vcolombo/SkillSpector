@@ -13,8 +13,9 @@ optional_env:
   - name: SKILLSPECTOR_PROVIDER
     description: >-
       LLM provider for the optional semantic pass: openai, anthropic,
-      anthropic_proxy, bedrock, nv_build, nv_inference, or a local CLI provider
-      (claude_cli, codex_cli, gemini_cli). Static analysis runs without it.
+      anthropic_proxy, nv_build, or nv_inference. Limited to providers whose
+      API-key credentials enable the LLM pass through this plugin's scan core
+      (run_scan); static analysis runs without any of these.
   - name: SKILLSPECTOR_MODEL
     description: Optional model override for the selected provider.
   - name: OPENAI_API_KEY
@@ -33,7 +34,3 @@ optional_env:
       API key used when SKILLSPECTOR_PROVIDER=nv_build or nv_inference and
       use_llm=true.
     secret: true
-  - name: AWS_REGION
-    description: AWS region for the bedrock provider (defaults to us-west-2).
-  - name: AWS_PROFILE
-    description: Named AWS profile for the bedrock provider's SigV4 credentials.

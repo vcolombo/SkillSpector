@@ -52,27 +52,24 @@ SKILLSPECTOR_SCAN = {
             },
             "provider": {
                 "type": "string",
-                # A curated subset of the SKILLSPECTOR_PROVIDER values accepted
-                # by skillspector.providers._select_active_provider. antigravity_cli
-                # is intentionally omitted (it is registered but disabled). This
-                # enum is advisory: the core validates the value at scan time and
-                # rejects anything it does not recognise.
+                # Only credential-backed providers are listed. run_scan (the core
+                # this plugin calls) gates the LLM pass on
+                # resolve_provider_credentials() is not None, which returns None
+                # for bedrock (SigV4) and the CLI providers — so selecting those
+                # here could never flip llm_used to true. The enum is advisory;
+                # the core still validates the value at scan time.
                 "enum": [
                     "openai",
                     "anthropic",
                     "anthropic_proxy",
-                    "bedrock",
                     "nv_build",
                     "nv_inference",
-                    "claude_cli",
-                    "codex_cli",
-                    "gemini_cli",
                 ],
                 "description": (
                     "Optional LLM provider, used only when use_llm is true. "
-                    "Overrides SKILLSPECTOR_PROVIDER for this scan. CLI providers "
-                    "(claude_cli, codex_cli, gemini_cli) use a local agent binary "
-                    "and need no API key."
+                    "Overrides SKILLSPECTOR_PROVIDER for this scan. Limited to "
+                    "providers whose API-key credentials enable the semantic pass "
+                    "through this plugin's scan core."
                 ),
             },
             "model": {

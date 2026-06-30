@@ -30,9 +30,16 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import threading
 from typing import Any
 
 _VALID_FORMATS = ("json", "markdown", "sarif", "terminal")
+
+# Provider/model selection is plumbed through process-global env vars that
+# SkillSpector's core reads, so concurrent handler invocations applying
+# different overrides would race. Serialize the (mutate env → scan → restore)
+# critical section so one call's override can never leak into another's scan.
+_ENV_LOCK = threading.Lock()
 
 
 def _run_scan_sync(
@@ -88,9 +95,13 @@ def skillspector_scan(args: dict, **kwargs) -> str:
         return json.dumps({"error": "`yara_rules_dir` must be a string path."})
 
     # Provider/model selection is resolved by SkillSpector from the environment.
-    # Apply per-call overrides only when an LLM pass is actually requested.
+    # Apply per-call overrides only when an LLM pass is actually requested, and
+    # only then take the env lock — static scans stay fully concurrent.
     saved_env: dict[str, str | None] = {}
-    if use_llm:
+    lock_held = False
+    if use_llm and (provider or model):
+        _ENV_LOCK.acquire()
+        lock_held = True
         if provider:
             saved_env["SKILLSPECTOR_PROVIDER"] = os.environ.get("SKILLSPECTOR_PROVIDER")
             os.environ["SKILLSPECTOR_PROVIDER"] = provider
@@ -125,8 +136,14 @@ def skillspector_scan(args: dict, **kwargs) -> str:
             )
         return json.dumps({"error": str(exc), "type": type(exc).__name__})
     finally:
-        for key, prior in saved_env.items():
-            if prior is None:
-                os.environ.pop(key, None)
-            else:
-                os.environ[key] = prior
+        try:
+            for key, prior in saved_env.items():
+                if prior is None:
+                    os.environ.pop(key, None)
+                else:
+                    os.environ[key] = prior
+        finally:
+            # Always release after restoring the environment, never before, so a
+            # concurrent waiter resumes against the restored env (not a deadlock).
+            if lock_held:
+                _ENV_LOCK.release()

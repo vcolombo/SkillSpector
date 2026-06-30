@@ -36,18 +36,19 @@ from types import ModuleType
 import pytest
 
 _PLUGIN_DIR = Path(__file__).resolve().parents[2] / "extensions" / "hermes"
-_PLUGIN_TOOLS = _PLUGIN_DIR / "skillspector_hermes" / "tools.py"
+_PKG_DIR = _PLUGIN_DIR / "skillspector_hermes"
 
 
-def _load_tools() -> ModuleType:
-    spec = importlib.util.spec_from_file_location("hermes_skillspector_tools", _PLUGIN_TOOLS)
+def _load_module(filename: str, modname: str) -> ModuleType:
+    spec = importlib.util.spec_from_file_location(modname, _PKG_DIR / filename)
     assert spec and spec.loader
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
 
 
-tools = _load_tools()
+tools = _load_module("tools.py", "hermes_skillspector_tools")
+schemas = _load_module("schemas.py", "hermes_skillspector_schemas")
 
 
 def test_missing_target_returns_json_error() -> None:
@@ -164,6 +165,35 @@ def test_static_scan_against_safe_fixture_is_clean() -> None:
     assert out["risk_score"] == 0
     assert out["safe_to_install"] is True
     assert out["scan_mode"] == "static-only"
+
+
+def test_provider_enum_is_limited_to_credential_backed_providers() -> None:
+    """The schema must only advertise providers whose creds enable run_scan's LLM pass.
+
+    run_scan gates ``llm_used`` on ``resolve_provider_credentials() is not None``,
+    which is None for bedrock (SigV4) and the CLI providers — selecting those
+    could never turn the semantic pass on, so they must not be offered here.
+    """
+    enum = schemas.SKILLSPECTOR_SCAN["parameters"]["properties"]["provider"]["enum"]
+    assert set(enum) == {"openai", "anthropic", "anthropic_proxy", "nv_build", "nv_inference"}
+    for excluded in ("bedrock", "claude_cli", "codex_cli", "gemini_cli", "antigravity_cli"):
+        assert excluded not in enum
+
+
+def test_override_lock_is_released_between_calls(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Two sequential override scans must both complete (lock released, no deadlock)."""
+
+    def fake_run(target, *, use_llm, output_format, yara_rules_dir):  # noqa: ANN001, ANN202
+        return {"target": target, "risk_score": 0}
+
+    monkeypatch.setattr(tools, "_run_scan_sync", fake_run)
+    args = {"target": "x", "use_llm": True, "provider": "anthropic", "model": "m"}
+    first = json.loads(tools.skillspector_scan(dict(args)))
+    second = json.loads(tools.skillspector_scan(dict(args)))
+    assert first["risk_score"] == 0 and second["risk_score"] == 0
+    # The lock is free again after both calls returned.
+    assert tools._ENV_LOCK.acquire(blocking=False) is True
+    tools._ENV_LOCK.release()
 
 
 def test_plugin_import_by_name_does_not_shadow_skillspector() -> None:
