@@ -474,6 +474,17 @@ def _build_metadata(
     if use_llm and attempted:
         meta["llm_calls_attempted"] = attempted
         meta["llm_calls_succeeded"] = succeeded
+        # Surface every failed call's node + error, not just the fully-degraded
+        # aggregate below: on hosts that swallow the handler's log output (e.g.
+        # a Hermes plugin runtime), this metadata is the only way a caller can
+        # learn which analyzer failed and why.
+        failures = [
+            {"node": str(r.get("node")), "error": str(r.get("error") or "unknown error")}
+            for r in llm_call_log
+            if not r.get("ok")
+        ]
+        if failures:
+            meta["llm_call_errors"] = failures
     if degraded:
         meta["llm_degraded"] = True
         reasons = sorted(
