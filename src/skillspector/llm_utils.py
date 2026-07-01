@@ -92,9 +92,11 @@ def _resolve_default_chat_model() -> str:
 def is_llm_available() -> tuple[bool, str | None]:
     """Return ``(available, error_message)`` describing LLM availability.
 
-    For CLI providers (``claude_cli``, ``codex_cli``, ``gemini_cli``) the check
-    delegates to the provider's ``is_available()`` method (binary on PATH +
-    auth).  For HTTP providers, it falls back to credential resolution.
+    For the host provider (a Hermes ``ctx.llm`` bound for the current scan)
+    and for CLI providers (``claude_cli``, ``codex_cli``, ``gemini_cli``) the
+    check delegates to the provider's ``is_available()`` method — capability,
+    not credentials, so availability can be ``True`` with no API key present.
+    For HTTP providers, it falls back to credential resolution.
     """
     provider = get_active_provider()
     if is_host_provider(provider):
