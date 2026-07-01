@@ -56,7 +56,14 @@ class HostLLMProvider:
         user_input = os.environ.get("SKILLSPECTOR_MODEL", "").strip()
         return user_input or self.SLOT_DEFAULTS.get(slot, "") or self.DEFAULT_MODEL
 
-    def create_chat_model(
+    # NOTE: deliberately NOT named ``create_chat_model``. The host adapter is
+    # not a ``langchain_core`` ``BaseChatModel``, so implementing the
+    # ``ChatModelProvider`` protocol method here would violate its declared
+    # return type and let ``skillspector.providers.create_chat_model()`` hand
+    # a non-BaseChatModel to callers typed against it. Like the CLI providers
+    # (which omit the method entirely), dispatch happens capability-first in
+    # ``llm_utils.get_chat_model``, which calls this factory directly.
+    def create_plugin_chat_model(
         self,
         model: str,
         *,

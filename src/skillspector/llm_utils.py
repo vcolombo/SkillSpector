@@ -270,7 +270,7 @@ def get_chat_model(
     provider = get_active_provider()
     if is_host_provider(provider):
         resolved_model = model or provider.resolve_model()
-        host_model = provider.create_chat_model(
+        host_model = provider.create_plugin_chat_model(
             resolved_model, max_tokens=get_max_output_tokens(resolved_model), timeout=120
         )
         if host_model is None:

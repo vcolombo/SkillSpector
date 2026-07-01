@@ -90,7 +90,15 @@ def _run_sync(coro: Any) -> Any:
     exists only for the synchronous ``run_batches`` / ``chat_completion`` paths,
     which are not used under Hermes. Fails clearly if called inside a running loop.
     """
-    return asyncio.run(coro)
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(coro)
+    coro.close()  # avoid a "coroutine was never awaited" warning
+    raise RuntimeError(
+        "PluginLlmChatModel.invoke() cannot be used inside a running event loop; "
+        "use `await ainvoke(...)` instead."
+    )
 
 
 class _StructuredPluginLlmModel:

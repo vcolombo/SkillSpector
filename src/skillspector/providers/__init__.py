@@ -189,10 +189,12 @@ def create_chat_model(
 ) -> BaseChatModel:
     """Create the active provider's native LangChain chat model.
 
-    CLI providers (``claude_cli``, ``codex_cli``, ``gemini_cli``) do not have
-    a native LangChain chat model — callers that need CLI transport should use
+    CLI providers (``claude_cli``, ``codex_cli``, ``gemini_cli``) and the host
+    provider (Hermes ``ctx.llm``) do not have a native LangChain chat model —
+    callers that need those transports should use
     :func:`skillspector.llm_utils.get_chat_model` instead (which returns an
-    :class:`~skillspector.llm_utils.AgentCLIChatModel` adapter).
+    :class:`~skillspector.llm_utils.AgentCLIChatModel` or
+    ``PluginLlmChatModel`` adapter).
 
     If the active provider is not configured, fall back to standard OpenAI
     environment variables. This preserves the historical ``OPENAI_API_KEY``
@@ -200,8 +202,10 @@ def create_chat_model(
     """
     provider = _select_active_provider()
 
-    # CLI providers don't participate in the create_chat_model path.
-    if not has_cli_capability(provider):
+    # CLI and host providers don't participate in the create_chat_model path:
+    # their adapters aren't BaseChatModel instances, so returning them here
+    # would violate this function's declared return type.
+    if not has_cli_capability(provider) and not isinstance(provider, HostLLMProvider):
         llm = provider.create_chat_model(model, max_tokens=max_tokens, timeout=timeout)
         if llm is not None:
             return llm

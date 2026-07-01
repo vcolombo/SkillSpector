@@ -68,21 +68,37 @@ def test_no_credentials_and_unknown_metadata() -> None:
     assert provider.resolve_model() == "host"
 
 
-def test_create_chat_model_returns_adapter_bound_to_host() -> None:
+def test_create_plugin_chat_model_returns_adapter_bound_to_host() -> None:
     host = _FakeHostLlm()
     token = set_host_llm(host)
     try:
-        model = HostLLMProvider().create_chat_model("host", max_tokens=1024)
+        model = HostLLMProvider().create_plugin_chat_model("host", max_tokens=1024)
         assert isinstance(model, PluginLlmChatModel)
     finally:
         reset_host_llm(token)
 
 
-def test_create_chat_model_none_when_unbound() -> None:
-    assert HostLLMProvider().create_chat_model("host", max_tokens=1024) is None
+def test_create_plugin_chat_model_none_when_unbound() -> None:
+    assert HostLLMProvider().create_plugin_chat_model("host", max_tokens=1024) is None
 
 
-def test_create_chat_model_forwards_only_operator_env_override(
+def test_module_create_chat_model_never_returns_host_adapter() -> None:
+    # HostLLMProvider intentionally has no ChatModelProvider.create_chat_model:
+    # the module-level factory is typed -> BaseChatModel, and the host adapter
+    # isn't one. With a host bound (and no HTTP credentials), the factory must
+    # raise the no-key error rather than hand back a PluginLlmChatModel.
+    from skillspector.providers import create_chat_model
+
+    assert not hasattr(HostLLMProvider(), "create_chat_model")
+    token = set_host_llm(_FakeHostLlm())
+    try:
+        with pytest.raises(ValueError, match="No LLM API key configured"):
+            create_chat_model("host", max_tokens=1024)
+    finally:
+        reset_host_llm(token)
+
+
+def test_create_plugin_chat_model_forwards_only_operator_env_override(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     # Callers pass SkillSpector-internal model labels (analyzer defaults),
@@ -93,14 +109,14 @@ def test_create_chat_model_forwards_only_operator_env_override(
     token = set_host_llm(host)
     try:
         monkeypatch.delenv("SKILLSPECTOR_MODEL", raising=False)
-        internal_label = HostLLMProvider().create_chat_model(
+        internal_label = HostLLMProvider().create_plugin_chat_model(
             "deepseek-ai/deepseek-v4-flash", max_tokens=1024
         )
         asyncio.run(internal_label.ainvoke("p"))
         assert "model" not in host.calls[0]
 
         monkeypatch.setenv("SKILLSPECTOR_MODEL", "operator-model")
-        operator = HostLLMProvider().create_chat_model("operator-model", max_tokens=1024)
+        operator = HostLLMProvider().create_plugin_chat_model("operator-model", max_tokens=1024)
         asyncio.run(operator.ainvoke("p"))
         assert host.calls[1]["model"] == "operator-model"
     finally:

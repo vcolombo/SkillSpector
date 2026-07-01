@@ -147,6 +147,18 @@ def test_non_trust_errors_are_not_retried() -> None:
         asyncio.run(structured.ainvoke("prompt"))
 
 
+def test_sync_invoke_inside_running_loop_raises_clear_error() -> None:
+    # invoke() exists for sync callers only; from async code the guidance
+    # must name the fix (await ainvoke) instead of asyncio.run's generic error.
+    model = PluginLlmChatModel(_FakeHostLlm())
+
+    async def _call_invoke_from_async() -> None:
+        model.invoke("prompt")
+
+    with pytest.raises(RuntimeError, match="use `await ainvoke"):
+        asyncio.run(_call_invoke_from_async())
+
+
 def test_batch_and_stream_fail_loudly() -> None:
     model = PluginLlmChatModel(_FakeHostLlm())
     with pytest.raises(NotImplementedError):
