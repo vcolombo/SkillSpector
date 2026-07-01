@@ -36,9 +36,8 @@ SKILLSPECTOR_SCAN = {
             "use_llm": {
                 "type": "boolean",
                 "description": (
-                    "Run the optional LLM semantic pass on top of static "
-                    "analysis. Honoured only when provider credentials resolve. "
-                    "Defaults to false (fast static-only scan)."
+                    "Run the optional LLM semantic pass (uses the Hermes host "
+                    "model). Defaults to false (fast static-only scan)."
                 ),
             },
             "output_format": {
@@ -49,32 +48,6 @@ SKILLSPECTOR_SCAN = {
             "yara_rules_dir": {
                 "type": "string",
                 "description": "Optional directory of additional YARA rules.",
-            },
-            "provider": {
-                "type": "string",
-                # Only credential-backed providers are listed. run_scan (the core
-                # this plugin calls) gates the LLM pass on
-                # resolve_provider_credentials() is not None, which returns None
-                # for bedrock (SigV4) and the CLI providers — so selecting those
-                # here could never flip llm_used to true. The enum is advisory;
-                # the core still validates the value at scan time.
-                "enum": [
-                    "openai",
-                    "anthropic",
-                    "anthropic_proxy",
-                    "nv_build",
-                    "nv_inference",
-                ],
-                "description": (
-                    "Optional LLM provider, used only when use_llm is true. "
-                    "Overrides SKILLSPECTOR_PROVIDER for this scan. Limited to "
-                    "providers whose API-key credentials enable the semantic pass "
-                    "through this plugin's scan core."
-                ),
-            },
-            "model": {
-                "type": "string",
-                "description": "Optional model override, used only when use_llm is true.",
             },
         },
         "required": ["target"],

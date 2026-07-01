@@ -10,33 +10,7 @@ author: NVIDIA
 provides_tools:
   - skillspector_scan
 optional_env:
-  - name: SKILLSPECTOR_PROVIDER
-    description: >-
-      LLM provider for the optional semantic pass: openai, anthropic,
-      anthropic_proxy, nv_build, or nv_inference. Limited to providers whose
-      API-key credentials enable the LLM pass through this plugin's scan core
-      (run_scan); static analysis runs without any of these.
   - name: SKILLSPECTOR_MODEL
-    description: Optional model override for the selected provider.
-  - name: OPENAI_API_KEY
-    description: API key used when SKILLSPECTOR_PROVIDER=openai and use_llm=true.
-    secret: true
-  - name: OPENAI_BASE_URL
     description: >-
-      Override the OpenAI base URL to target an OpenAI-compatible endpoint when
-      SKILLSPECTOR_PROVIDER=openai.
-  - name: OPENAI_PROJECT_ID
-    description: Optional OpenAI project id when SKILLSPECTOR_PROVIDER=openai.
-  - name: ANTHROPIC_API_KEY
-    description: API key used when SKILLSPECTOR_PROVIDER=anthropic and use_llm=true.
-    secret: true
-  - name: ANTHROPIC_PROXY_API_KEY
-    description: API key used when SKILLSPECTOR_PROVIDER=anthropic_proxy and use_llm=true.
-    secret: true
-  - name: ANTHROPIC_PROXY_ENDPOINT_URL
-    description: Endpoint URL for the anthropic_proxy provider.
-  - name: NVIDIA_INFERENCE_KEY
-    description: >-
-      API key used when SKILLSPECTOR_PROVIDER=nv_build or nv_inference and
-      use_llm=true.
-    secret: true
+      Optional model override for the host LLM pass. Leave unset to use whatever
+      model the Hermes agent is currently configured with.

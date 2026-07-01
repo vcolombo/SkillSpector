@@ -78,32 +78,34 @@ a clean full scan.
 ## Tool parameters
 
 - `target` (required): path, URL, zip, Git repo, or `SKILL.md` file to scan.
-- `use_llm`: run the optional semantic LLM pass. Default `false` (fast,
-  static-only). Honoured only when provider credentials resolve.
+- `use_llm`: run the optional semantic LLM pass (uses the Hermes host model).
+  Default `false` (fast, static-only).
 - `output_format`: `json`, `markdown`, `sarif`, or `terminal`. Default `json`.
 - `yara_rules_dir`: optional directory of additional YARA rules.
-- `provider`: optional LLM provider (`openai`, `anthropic`, `anthropic_proxy`,
-  `nv_build`, or `nv_inference`), used only when `use_llm` is true. The list is
-  limited to providers whose API-key credentials enable the semantic pass
-  through this plugin's scan core (`run_scan`); `bedrock` and the CLI providers
-  resolve no credentials there, so they can't turn on the LLM pass. Unknown
-  values are rejected by SkillSpector's core at scan time as a JSON error.
-- `model`: optional model override, used only when `use_llm` is true.
 
-## LLM-backed analysis
+## LLM configuration
 
-Static analysis is the default and needs no credentials. To enable the semantic
-pass, configure provider credentials in the environment Hermes runs in (e.g.
-`SKILLSPECTOR_PROVIDER=anthropic` and `ANTHROPIC_API_KEY=...`), then call the
-tool with `use_llm=true`:
+The optional semantic pass (`use_llm: true`) runs against the **host's**
+configured model via `ctx.llm` — the plugin manages no API keys. By default it
+"uses what the agent is using." Operators may gate provider/model overrides per
+plugin in `config.yaml`:
 
-```text
-Use skillspector_scan on ./my-skill with use_llm=true and provider=anthropic.
+```yaml
+plugins:
+  entries:
+    skillspector:
+      llm:
+        allow_provider_override: true
+        allowed_providers: [anthropic, openrouter]
+        allow_model_override: true
+        allowed_models: [anthropic/claude-3-5-haiku]
 ```
 
-These environment variables are declared as `optional_env` in `plugin.yaml`, so
-Hermes surfaces them during `hermes plugins install` but does not disable the
-plugin when they are absent.
+`SKILLSPECTOR_MODEL` (declared as `optional_env` in `plugin.yaml`) is an
+optional model override for the host LLM pass; leave it unset to use whatever
+model the Hermes agent is currently configured with. Static analysis is the
+default and needs no LLM configuration at all — omit `use_llm` (or pass
+`use_llm=false`) to run static-only.
 
 ## Handler contract
 

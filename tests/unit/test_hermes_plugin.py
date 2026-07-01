@@ -193,17 +193,11 @@ def test_static_scan_against_safe_fixture_is_clean() -> None:
     assert out["scan_mode"] == "static-only"
 
 
-def test_provider_enum_is_limited_to_credential_backed_providers() -> None:
-    """The schema must only advertise providers whose creds enable run_scan's LLM pass.
-
-    run_scan gates ``llm_used`` on ``resolve_provider_credentials() is not None``,
-    which is None for bedrock (SigV4) and the CLI providers — selecting those
-    could never turn the semantic pass on, so they must not be offered here.
-    """
-    enum = schemas.SKILLSPECTOR_SCAN["parameters"]["properties"]["provider"]["enum"]
-    assert set(enum) == {"openai", "anthropic", "anthropic_proxy", "nv_build", "nv_inference"}
-    for excluded in ("bedrock", "claude_cli", "codex_cli", "gemini_cli", "antigravity_cli"):
-        assert excluded not in enum
+def test_schema_has_no_provider_or_model_params() -> None:
+    props = schemas.SKILLSPECTOR_SCAN["parameters"]["properties"]
+    assert "provider" not in props
+    assert "model" not in props
+    assert set(props) == {"target", "use_llm", "output_format", "yara_rules_dir"}
 
 
 def test_plugin_import_by_name_does_not_shadow_skillspector() -> None:
