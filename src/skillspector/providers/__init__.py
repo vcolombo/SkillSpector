@@ -38,7 +38,8 @@ Selection happens via the ``SKILLSPECTOR_PROVIDER`` env var:
 
 A bound host LLM (set by the Hermes plugin) selects ``HostLLMProvider``
 automatically, ahead of the env var. When unset with no host bound, the
-selector defaults to ``nv_build``.
+selector defaults to ``nv_inference`` when that optional subpackage is
+bundled with the installation, else ``nv_build``.
 
 CLI providers (``claude_cli``, ``codex_cli``, ``gemini_cli``) implement the
 optional :class:`~skillspector.providers.base.AgentCLICapable` interface — they
