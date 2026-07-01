@@ -58,6 +58,7 @@ from .base import (
     ModelMetadataProvider,
     has_cli_capability,
 )
+from .host import HostLLMProvider, get_host_llm
 from .nv_build import NvBuildProvider
 
 NO_LLM_API_KEY_MESSAGE = (
@@ -75,8 +76,15 @@ def raise_no_llm_api_key_configured() -> NoReturn:
 
 def _select_active_provider() -> LLMProvider:
     """Construct the active provider based on ``SKILLSPECTOR_PROVIDER``."""
+    # A bound host LLM (Hermes plugin call) wins over any env selection.
+    if get_host_llm() is not None:
+        return HostLLMProvider()
+
     name = os.environ.get("SKILLSPECTOR_PROVIDER", "").strip().lower()
 
+    if name == "auto":
+        # Explicit opt-in to the host LLM; reports unavailable if none is bound.
+        return HostLLMProvider()
     if name == "openai":
         from .openai import OpenAIProvider
 
