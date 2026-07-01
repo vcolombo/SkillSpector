@@ -19,5 +19,6 @@ Hermes host ``ctx.llm`` (no plugin-managed credentials)."""
 from __future__ import annotations
 
 from ._state import get_host_llm, reset_host_llm, set_host_llm
+from .provider import HostLLMProvider
 
-__all__ = ["get_host_llm", "reset_host_llm", "set_host_llm"]
+__all__ = ["HostLLMProvider", "get_host_llm", "reset_host_llm", "set_host_llm"]
