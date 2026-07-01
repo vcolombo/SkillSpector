@@ -49,8 +49,12 @@ class HostLLMProvider:
 
     def resolve_model(self, slot: str = "default") -> str:
         # The host owns model selection; honour an explicit operator override if
-        # present, else a non-empty sentinel (required by the provider protocol).
-        return os.environ.get("SKILLSPECTOR_MODEL", "").strip() or self.DEFAULT_MODEL
+        # present, else the slot default, else a non-empty sentinel (required by
+        # the provider protocol). Mirrors the standard provider waterfall
+        # (env → slot default → general default), even though SLOT_DEFAULTS is
+        # empty today — so populating it later behaves like every other provider.
+        user_input = os.environ.get("SKILLSPECTOR_MODEL", "").strip()
+        return user_input or self.SLOT_DEFAULTS.get(slot, "") or self.DEFAULT_MODEL
 
     def create_chat_model(
         self,
@@ -62,5 +66,9 @@ class HostLLMProvider:
         host_llm = get_host_llm()
         if host_llm is None:
             return None
+        # `model` here is this provider's own label — the "host" sentinel unless
+        # an operator set SKILLSPECTOR_MODEL — not a host-recognised model name,
+        # so it is deliberately not forwarded. Only a real operator override
+        # reaches ctx.llm; unset means "use whatever model the host is using".
         override_model = os.environ.get("SKILLSPECTOR_MODEL", "").strip() or None
         return PluginLlmChatModel(host_llm, model=override_model)

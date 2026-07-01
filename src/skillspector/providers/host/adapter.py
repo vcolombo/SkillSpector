@@ -75,7 +75,14 @@ class _StructuredPluginLlmModel:
         )
         data = getattr(result, "output", None)
         if not isinstance(data, dict):
-            data = json.loads(_result_text(result))
+            raw = _result_text(result)
+            try:
+                data = json.loads(raw)
+            except (json.JSONDecodeError, TypeError) as exc:
+                raise ValueError(
+                    "Host LLM structured response was neither a parsed object "
+                    f"(result.output) nor valid JSON text: {raw[:200]!r}"
+                ) from exc
         return self._schema.model_validate(data)
 
     def invoke(self, prompt: str) -> Any:

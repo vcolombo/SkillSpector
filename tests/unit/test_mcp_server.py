@@ -62,10 +62,10 @@ async def test_run_scan_llm_accounting_is_honest_without_credentials(
     assert result["scan_mode"] == "static-only"
 
 
-async def test_run_scan_reports_llm_available_with_credentials(
+async def test_run_scan_reports_llm_available_when_capable(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Credentials present but use_llm=False: available, but honestly not used."""
+    """LLM available (any capable provider) but use_llm=False: honestly not used."""
     monkeypatch.setattr(mcp_server, "is_llm_available", lambda: (True, None))
     _write_skill(tmp_path)
 

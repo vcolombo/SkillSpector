@@ -268,9 +268,14 @@ def get_chat_model(
     provider = get_active_provider()
     if is_host_provider(provider):
         resolved_model = model or provider.resolve_model()
-        return provider.create_chat_model(
+        host_model = provider.create_chat_model(
             resolved_model, max_tokens=get_max_output_tokens(resolved_model), timeout=120
         )
+        if host_model is None:
+            # is_host_provider() implies a host LLM was bound at selection time;
+            # None here means it was cleared mid-scan, which the plugin never does.
+            raise ValueError("Host LLM provider is active but no host LLM is bound.")
+        return host_model
     if has_cli_capability(provider):
         resolved_model = model or provider.resolve_model()
         return AgentCLIChatModel(provider, resolved_model, get_max_output_tokens(resolved_model))

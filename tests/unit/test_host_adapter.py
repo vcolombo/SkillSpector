@@ -86,6 +86,15 @@ def test_structured_path_falls_back_to_text_json() -> None:
     assert result.ok is False and result.note == "from text"
 
 
+def test_structured_path_raises_clear_error_on_unparseable_response() -> None:
+    # Neither a parsed object (output=None) nor valid JSON text → a clear error,
+    # not a cryptic json.loads failure on a repr string.
+    host = _FakeHostLlm(text="not valid json {{{")
+    structured = PluginLlmChatModel(host).with_structured_output(_Schema)
+    with pytest.raises(ValueError, match="neither a parsed object"):
+        asyncio.run(structured.ainvoke("prompt"))
+
+
 def test_batch_and_stream_fail_loudly() -> None:
     model = PluginLlmChatModel(_FakeHostLlm())
     with pytest.raises(NotImplementedError):

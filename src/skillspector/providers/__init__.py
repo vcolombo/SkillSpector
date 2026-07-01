@@ -33,8 +33,12 @@ Selection happens via the ``SKILLSPECTOR_PROVIDER`` env var:
     antigravity_cli → AntigravityCLIProvider  (local ``agy`` binary; registered
                                                but disabled — agy is TTY-only and
                                                can't be captured; use gemini_cli)
+    auto            → HostLLMProvider         (Hermes host ``ctx.llm``; no
+                                               plugin-managed credentials)
 
-When unset, the selector defaults to ``nv_build``.
+A bound host LLM (set by the Hermes plugin) selects ``HostLLMProvider``
+automatically, ahead of the env var. When unset with no host bound, the
+selector defaults to ``nv_build``.
 
 CLI providers (``claude_cli``, ``codex_cli``, ``gemini_cli``) implement the
 optional :class:`~skillspector.providers.base.AgentCLICapable` interface — they
