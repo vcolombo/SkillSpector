@@ -31,10 +31,18 @@ from . import schemas, tools
 
 
 def register(ctx):
-    """Called once at plugin startup. Wires the scan schema to its handler."""
+    """Called once at plugin startup. Wires the scan schema to its handler.
+
+    ``ctx.llm`` is read at call time (not registration time) so each scan uses
+    the host's currently-active model, then bound into the handler.
+    """
+
+    def _handler(args, **kwargs):
+        return tools.skillspector_scan(args, host_llm=ctx.llm, **kwargs)
+
     ctx.register_tool(
         name="skillspector_scan",
         toolset="skillspector",
         schema=schemas.SKILLSPECTOR_SCAN,
-        handler=tools.skillspector_scan,
+        handler=_handler,
     )
