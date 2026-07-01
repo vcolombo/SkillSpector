@@ -29,34 +29,42 @@ class _Schema(BaseModel):
 
 
 class _Result:
-    def __init__(self, *, text: str = "", output: dict | None = None) -> None:
+    def __init__(self, *, text: str = "", parsed: dict | None = None) -> None:
         self.text = text
-        self.output = output
+        self.parsed = parsed
 
 
 class _FakeHostLlm:
-    """Records calls and returns canned results matching the assumed contract."""
+    """Records calls and enforces the real ``agent.plugin_llm.PluginLlm`` contract
+    (verified against Hermes 0.17.0): structured calls require non-empty
+    ``instructions`` AND at least one input block; parsed data is ``result.parsed``.
+    """
 
-    def __init__(self, *, text: str = "hello", output: dict | None = None) -> None:
+    def __init__(self, *, text: str = "hello", parsed: dict | None = None) -> None:
         self._text = text
-        self._output = output
+        self._parsed = parsed
         self.calls: list[dict] = []
 
-    async def acomplete(self, *, messages, purpose=None, **kw):
+    async def acomplete(self, messages, *, purpose=None, **kw):
         self.calls.append({"kind": "text", "messages": messages, "purpose": purpose, **kw})
         return _Result(text=self._text)
 
     async def acomplete_structured(self, *, instructions, input, json_schema, purpose=None, **kw):
+        if not instructions or not instructions.strip():
+            raise ValueError("acomplete_structured requires non-empty instructions")
+        if not input:
+            raise ValueError("acomplete_structured requires at least one input block")
         self.calls.append(
             {
                 "kind": "structured",
                 "instructions": instructions,
+                "input": list(input),
                 "schema": json_schema,
                 "purpose": purpose,
                 **kw,
             }
         )
-        return _Result(text=self._text, output=self._output)
+        return _Result(text=self._text, parsed=self._parsed)
 
 
 def test_text_path_calls_acomplete_and_returns_message() -> None:
@@ -70,13 +78,15 @@ def test_text_path_calls_acomplete_and_returns_message() -> None:
 
 
 def test_structured_path_validates_into_schema() -> None:
-    host = _FakeHostLlm(output={"ok": True, "note": "clean"})
+    host = _FakeHostLlm(parsed={"ok": True, "note": "clean"})
     structured = PluginLlmChatModel(host).with_structured_output(_Schema)
     result = asyncio.run(structured.ainvoke("prompt"))
     assert isinstance(result, _Schema)
     assert result.ok is True and result.note == "clean"
     assert host.calls[0]["kind"] == "structured"
     assert host.calls[0]["schema"] == _Schema.model_json_schema()
+    # The analyzer prompt travels as the (required) input block.
+    assert host.calls[0]["input"] == [{"type": "text", "text": "prompt"}]
 
 
 def test_structured_path_falls_back_to_text_json() -> None:
@@ -87,7 +97,7 @@ def test_structured_path_falls_back_to_text_json() -> None:
 
 
 def test_structured_path_raises_clear_error_on_unparseable_response() -> None:
-    # Neither a parsed object (output=None) nor valid JSON text → a clear error,
+    # Neither a parsed object (parsed=None) nor valid JSON text → a clear error,
     # not a cryptic json.loads failure on a repr string.
     host = _FakeHostLlm(text="not valid json {{{")
     structured = PluginLlmChatModel(host).with_structured_output(_Schema)

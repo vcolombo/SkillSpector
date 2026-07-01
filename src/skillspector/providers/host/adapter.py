@@ -31,6 +31,15 @@ from langchain_core.messages import AIMessage
 
 _PURPOSE = "skillspector-scan"
 
+# The host's structured API takes a short system-level directive in
+# ``instructions`` and the actual task content as input blocks (both are
+# required to be non-empty — verified against agent.plugin_llm in Hermes
+# 0.17.0). The analyzer prompt therefore travels as the input block.
+_STRUCTURED_INSTRUCTIONS = (
+    "Complete the analysis task described in the input. Respond with a single "
+    "JSON object conforming to the provided JSON schema."
+)
+
 
 def _result_text(result: Any) -> str:
     text = getattr(result, "text", None)
@@ -67,13 +76,15 @@ class _StructuredPluginLlmModel:
 
     async def ainvoke(self, prompt: str) -> Any:
         result = await self._host.acomplete_structured(  # type: ignore[attr-defined]
-            instructions=prompt,
-            input=[],
+            instructions=_STRUCTURED_INSTRUCTIONS,
+            input=[{"type": "text", "text": prompt}],
             json_schema=self._schema.model_json_schema(),
             purpose=_PURPOSE,
             **_override_kwargs(self._provider, self._model),
         )
-        data = getattr(result, "output", None)
+        # PluginLlmStructuredResult.parsed is set only when the response was
+        # valid JSON; otherwise fall back to extracting JSON from the text.
+        data = getattr(result, "parsed", None)
         if not isinstance(data, dict):
             raw = _result_text(result)
             try:
@@ -81,7 +92,7 @@ class _StructuredPluginLlmModel:
             except (json.JSONDecodeError, TypeError) as exc:
                 raise ValueError(
                     "Host LLM structured response was neither a parsed object "
-                    f"(result.output) nor valid JSON text: {raw[:200]!r}"
+                    f"(result.parsed) nor valid JSON text: {raw[:200]!r}"
                 ) from exc
         return self._schema.model_validate(data)
 

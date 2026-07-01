@@ -50,35 +50,41 @@ _SAFE_FIXTURE = Path(__file__).resolve().parents[1] / "fixtures" / "safe_skill"
 
 
 class _Result:
-    """Stand-in for a ``PluginLlm`` result: parsed data on ``.output``."""
+    """Stand-in for a ``PluginLlm`` result: parsed data on ``.parsed``."""
 
-    def __init__(self, *, text: str = "", output: dict | None = None) -> None:
+    def __init__(self, *, text: str = "", parsed: dict | None = None) -> None:
         self.text = text
-        self.output = output
+        self.parsed = parsed
 
 
 class _FakeHostLlm:
     """Duck-typed host LLM that records invocations and returns clean results.
 
-    ``{"findings": []}`` validates against both structured schemas the analyzers
-    request (``LLMAnalysisResult`` and ``MetaAnalyzerResult`` — each has
-    ``findings: list = Field(default_factory=list)``), so a real scan completes
-    cleanly while proving the host was actually driven.
+    Enforces the real ``PluginLlm`` contract (verified against Hermes 0.17.0):
+    structured calls need non-empty ``instructions`` and at least one input
+    block. ``{"findings": []}`` validates against both structured schemas the
+    analyzers request (``LLMAnalysisResult`` and ``MetaAnalyzerResult`` — each
+    has ``findings: list = Field(default_factory=list)``), so a real scan
+    completes cleanly while proving the host was actually driven.
     """
 
     def __init__(self) -> None:
         self.structured_calls = 0
         self.text_calls = 0
 
-    async def acomplete(self, *, messages, purpose=None, **kwargs):
+    async def acomplete(self, messages, *, purpose=None, **kwargs):
         self.text_calls += 1
         return _Result(text="")
 
     async def acomplete_structured(
         self, *, instructions, input, json_schema, purpose=None, **kwargs
     ):
+        if not instructions or not instructions.strip():
+            raise ValueError("acomplete_structured requires non-empty instructions")
+        if not input:
+            raise ValueError("acomplete_structured requires at least one input block")
         self.structured_calls += 1
-        return _Result(output={"findings": []})
+        return _Result(parsed={"findings": []})
 
 
 def test_run_scan_routes_llm_pass_through_bound_host() -> None:
