@@ -235,6 +235,25 @@ def test_plugin_import_by_name_does_not_shadow_skillspector() -> None:
         assert registered["name"] == "skillspector_scan"
         assert registered["toolset"] == "skillspector"
         assert callable(registered["handler"])
+
+        # A stub context without ``llm`` (like _Ctx here) must not break the
+        # never-raise contract: the handler degrades to a host-less call.
+        seen: dict[str, object] = {}
+        original_run = plugin.tools._run_scan_sync
+
+        def _fake_run(target, *, use_llm, output_format, yara_rules_dir):
+            from skillspector.providers.host import get_host_llm
+
+            seen["host"] = get_host_llm()
+            return {"risk_score": 0}
+
+        plugin.tools._run_scan_sync = _fake_run
+        try:
+            out = json.loads(registered["handler"]({"target": "x"}))
+        finally:
+            plugin.tools._run_scan_sync = original_run
+        assert out == {"risk_score": 0}
+        assert seen["host"] is None
     finally:
         sys.path.remove(str(_PLUGIN_DIR))
         for name in (

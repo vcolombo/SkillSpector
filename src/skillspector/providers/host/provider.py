@@ -66,9 +66,11 @@ class HostLLMProvider:
         host_llm = get_host_llm()
         if host_llm is None:
             return None
-        # `model` here is this provider's own label — the "host" sentinel unless
-        # an operator set SKILLSPECTOR_MODEL — not a host-recognised model name,
-        # so it is deliberately not forwarded. Only a real operator override
-        # reaches ctx.llm; unset means "use whatever model the host is using".
-        override_model = os.environ.get("SKILLSPECTOR_MODEL", "").strip() or None
+        # `model` is this provider's own label — normally resolve_model()'s
+        # output: an operator SKILLSPECTOR_MODEL override, or the "host"
+        # sentinel. Forward anything but the sentinel, so both operator
+        # overrides and explicit caller model= requests reach ctx.llm (where
+        # the host's trust gate decides); the sentinel means "use whatever
+        # model the host is using" and is deliberately not forwarded.
+        override_model = model if model and model != self.DEFAULT_MODEL else None
         return PluginLlmChatModel(host_llm, model=override_model)

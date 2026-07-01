@@ -58,8 +58,10 @@ async def run_scan(
     Args:
         target: Git URL, file URL, ``.zip``, ``.md`` file, or local directory.
         use_llm: Whether to request the optional LLM semantic pass on top of
-            static analysis. Honoured only when provider credentials resolve;
-            the returned payload reports what actually happened.
+            static analysis. Honoured only when the active provider is
+            available (API-key credentials, a capable local CLI, or a bound
+            Hermes host LLM); the returned payload reports what actually
+            happened.
         output_format: Format of the embedded ``report`` string. One of
             :data:`VALID_FORMATS`.
         yara_rules_dir: Optional directory of additional YARA rules.

@@ -15,6 +15,8 @@
 
 from __future__ import annotations
 
+import asyncio
+
 from skillspector.providers.host import reset_host_llm, set_host_llm
 from skillspector.providers.host.adapter import PluginLlmChatModel
 from skillspector.providers.host.provider import HostLLMProvider
@@ -26,6 +28,21 @@ class _FakeHostLlm:
 
     async def acomplete_structured(self, **kw):  # pragma: no cover
         raise AssertionError
+
+
+class _RecordingHostLlm:
+    """Records the kwargs of each ``acomplete`` call (to observe model forwarding)."""
+
+    def __init__(self) -> None:
+        self.calls: list[dict] = []
+
+    async def acomplete(self, **kw):
+        self.calls.append(kw)
+
+        class _Result:
+            text = "ok"
+
+        return _Result()
 
 
 def test_available_only_when_host_llm_bound() -> None:
@@ -61,3 +78,21 @@ def test_create_chat_model_returns_adapter_bound_to_host() -> None:
 
 def test_create_chat_model_none_when_unbound() -> None:
     assert HostLLMProvider().create_chat_model("host", max_tokens=1024) is None
+
+
+def test_create_chat_model_forwards_only_non_sentinel_model() -> None:
+    # The "host" sentinel means "use whatever the host is using" — not
+    # forwarded. Any other label (operator override or explicit caller
+    # model=) reaches ctx.llm as a model kwarg.
+    host = _RecordingHostLlm()
+    token = set_host_llm(host)
+    try:
+        sentinel = HostLLMProvider().create_chat_model("host", max_tokens=1024)
+        asyncio.run(sentinel.ainvoke("p"))
+        assert "model" not in host.calls[0]
+
+        explicit = HostLLMProvider().create_chat_model("some-model", max_tokens=1024)
+        asyncio.run(explicit.ainvoke("p"))
+        assert host.calls[1]["model"] == "some-model"
+    finally:
+        reset_host_llm(token)

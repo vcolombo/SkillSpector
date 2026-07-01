@@ -34,11 +34,13 @@ def register(ctx):
     """Called once at plugin startup. Wires the scan schema to its handler.
 
     ``ctx.llm`` is read at call time (not registration time) so each scan uses
-    the host's currently-active model, then bound into the handler.
+    the host's currently-active model, then bound into the handler. A context
+    without ``llm`` (stub contexts, alternate runtimes) degrades to host-less
+    static-only scanning instead of breaking the handler's never-raise contract.
     """
 
     def _handler(args, **kwargs):
-        return tools.skillspector_scan(args, host_llm=ctx.llm, **kwargs)
+        return tools.skillspector_scan(args, host_llm=getattr(ctx, "llm", None), **kwargs)
 
     ctx.register_tool(
         name="skillspector_scan",
