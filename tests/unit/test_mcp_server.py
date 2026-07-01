@@ -33,7 +33,7 @@ async def test_run_scan_returns_structured_verdict(
 ) -> None:
     """run_scan returns a JSON-serialisable verdict with the expected shape."""
     # No credentials: the LLM pass cannot run regardless of what is requested.
-    monkeypatch.setattr(mcp_server, "resolve_provider_credentials", lambda: None)
+    monkeypatch.setattr(mcp_server, "is_llm_available", lambda: (False, "no credentials"))
     _write_skill(tmp_path)
 
     result = await run_scan(str(tmp_path), use_llm=True, output_format="json")
@@ -51,7 +51,7 @@ async def test_run_scan_llm_accounting_is_honest_without_credentials(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Requesting the LLM with no credentials must report it as not used."""
-    monkeypatch.setattr(mcp_server, "resolve_provider_credentials", lambda: None)
+    monkeypatch.setattr(mcp_server, "is_llm_available", lambda: (False, "no credentials"))
     _write_skill(tmp_path)
 
     result = await run_scan(str(tmp_path), use_llm=True, output_format="json")
@@ -66,7 +66,7 @@ async def test_run_scan_reports_llm_available_with_credentials(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Credentials present but use_llm=False: available, but honestly not used."""
-    monkeypatch.setattr(mcp_server, "resolve_provider_credentials", lambda: ("key", None))
+    monkeypatch.setattr(mcp_server, "is_llm_available", lambda: (True, None))
     _write_skill(tmp_path)
 
     result = await run_scan(str(tmp_path), use_llm=False, output_format="json")

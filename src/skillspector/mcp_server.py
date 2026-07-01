@@ -32,8 +32,8 @@ from typing import TYPE_CHECKING, Any
 
 from skillspector import __version__
 from skillspector.graph import graph
+from skillspector.llm_utils import is_llm_available
 from skillspector.logging_config import get_logger
-from skillspector.providers import resolve_provider_credentials
 
 if TYPE_CHECKING:
     from mcp.server.fastmcp import FastMCP
@@ -74,7 +74,7 @@ async def run_scan(
     if output_format not in VALID_FORMATS:
         raise ValueError(f"output_format must be one of {VALID_FORMATS}, got {output_format!r}")
 
-    llm_available = resolve_provider_credentials() is not None
+    llm_available, _ = is_llm_available()
     llm_used = use_llm and llm_available
 
     state: dict[str, Any] = {
