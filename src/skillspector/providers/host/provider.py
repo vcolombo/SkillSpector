@@ -66,11 +66,15 @@ class HostLLMProvider:
         host_llm = get_host_llm()
         if host_llm is None:
             return None
-        # `model` is this provider's own label — normally resolve_model()'s
-        # output: an operator SKILLSPECTOR_MODEL override, or the "host"
-        # sentinel. Forward anything but the sentinel, so both operator
-        # overrides and explicit caller model= requests reach ctx.llm (where
-        # the host's trust gate decides); the sentinel means "use whatever
-        # model the host is using" and is deliberately not forwarded.
-        override_model = model if model and model != self.DEFAULT_MODEL else None
+        # Forward ONLY an explicit operator override (SKILLSPECTOR_MODEL) to
+        # ctx.llm — never the `model` parameter. Callers pass SkillSpector's
+        # own model labels (analyzer defaults like the nv_build names), which
+        # are meaningless in the host's model namespace; forwarding one trips
+        # the host's trust gate (PluginLlmTrustError: model override not
+        # allowed) and kills that analyzer's call — observed live on Hermes
+        # 0.17.0, where semantic_security_discovery passes an explicit label
+        # while the other analyzers use the "host" sentinel. The parameter is
+        # still honoured for token budgeting by the caller; host model choice
+        # belongs to the host unless the operator says otherwise.
+        override_model = os.environ.get("SKILLSPECTOR_MODEL", "").strip() or None
         return PluginLlmChatModel(host_llm, model=override_model)

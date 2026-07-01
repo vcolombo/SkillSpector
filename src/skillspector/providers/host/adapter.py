@@ -55,6 +55,34 @@ def _override_kwargs(provider: str | None, model: str | None) -> dict[str, str]:
     return kwargs
 
 
+def _is_trust_error(exc: Exception) -> bool:
+    """True when *exc* is the host's override trust-gate rejection.
+
+    Matched by type name (``PluginLlmTrustError``) because SkillSpector never
+    imports the Hermes ``agent`` package.
+    """
+    return type(exc).__name__ == "PluginLlmTrustError"
+
+
+async def _call_with_override_fallback(call: Any, kwargs: dict[str, Any]) -> Any:
+    """Invoke *call* with override kwargs; on a trust-gate rejection retry once
+    without them.
+
+    An operator may set SKILLSPECTOR_MODEL without enabling
+    ``allow_model_override`` in the host config — degrade to the host's default
+    model rather than failing the analyzer call.
+    """
+    overrides = {k: kwargs.pop(k) for k in ("provider", "model") if k in kwargs}
+    if not overrides:
+        return await call(**kwargs)
+    try:
+        return await call(**kwargs, **overrides)
+    except Exception as exc:  # noqa: BLE001 — retry only the trust rejection
+        if not _is_trust_error(exc):
+            raise
+        return await call(**kwargs)
+
+
 def _run_sync(coro: Any) -> Any:
     """Run *coro* to completion from a synchronous caller.
 
@@ -75,12 +103,15 @@ class _StructuredPluginLlmModel:
         self._model = model
 
     async def ainvoke(self, prompt: str) -> Any:
-        result = await self._host.acomplete_structured(  # type: ignore[attr-defined]
-            instructions=_STRUCTURED_INSTRUCTIONS,
-            input=[{"type": "text", "text": prompt}],
-            json_schema=self._schema.model_json_schema(),
-            purpose=_PURPOSE,
-            **_override_kwargs(self._provider, self._model),
+        result = await _call_with_override_fallback(
+            self._host.acomplete_structured,  # type: ignore[attr-defined]
+            {
+                "instructions": _STRUCTURED_INSTRUCTIONS,
+                "input": [{"type": "text", "text": prompt}],
+                "json_schema": self._schema.model_json_schema(),
+                "purpose": _PURPOSE,
+                **_override_kwargs(self._provider, self._model),
+            },
         )
         # PluginLlmStructuredResult.parsed is set only when the response was
         # valid JSON; otherwise fall back to extracting JSON from the text.
@@ -121,10 +152,13 @@ class PluginLlmChatModel:
         )
 
     async def ainvoke(self, prompt: str) -> AIMessage:
-        result = await self._host.acomplete(  # type: ignore[attr-defined]
-            messages=[{"role": "user", "content": prompt}],
-            purpose=_PURPOSE,
-            **_override_kwargs(self._provider, self._model),
+        result = await _call_with_override_fallback(
+            self._host.acomplete,  # type: ignore[attr-defined]
+            {
+                "messages": [{"role": "user", "content": prompt}],
+                "purpose": _PURPOSE,
+                **_override_kwargs(self._provider, self._model),
+            },
         )
         return AIMessage(content=_result_text(result))
 

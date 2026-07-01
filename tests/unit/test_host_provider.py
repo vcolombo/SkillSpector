@@ -17,6 +17,8 @@ from __future__ import annotations
 
 import asyncio
 
+import pytest
+
 from skillspector.providers.host import reset_host_llm, set_host_llm
 from skillspector.providers.host.adapter import PluginLlmChatModel
 from skillspector.providers.host.provider import HostLLMProvider
@@ -80,19 +82,26 @@ def test_create_chat_model_none_when_unbound() -> None:
     assert HostLLMProvider().create_chat_model("host", max_tokens=1024) is None
 
 
-def test_create_chat_model_forwards_only_non_sentinel_model() -> None:
-    # The "host" sentinel means "use whatever the host is using" — not
-    # forwarded. Any other label (operator override or explicit caller
-    # model=) reaches ctx.llm as a model kwarg.
+def test_create_chat_model_forwards_only_operator_env_override(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Callers pass SkillSpector-internal model labels (analyzer defaults),
+    # which are meaningless in the host's namespace and trip the host trust
+    # gate if forwarded (observed live on Hermes 0.17.0). Only an explicit
+    # operator SKILLSPECTOR_MODEL override reaches ctx.llm.
     host = _RecordingHostLlm()
     token = set_host_llm(host)
     try:
-        sentinel = HostLLMProvider().create_chat_model("host", max_tokens=1024)
-        asyncio.run(sentinel.ainvoke("p"))
+        monkeypatch.delenv("SKILLSPECTOR_MODEL", raising=False)
+        internal_label = HostLLMProvider().create_chat_model(
+            "deepseek-ai/deepseek-v4-flash", max_tokens=1024
+        )
+        asyncio.run(internal_label.ainvoke("p"))
         assert "model" not in host.calls[0]
 
-        explicit = HostLLMProvider().create_chat_model("some-model", max_tokens=1024)
-        asyncio.run(explicit.ainvoke("p"))
-        assert host.calls[1]["model"] == "some-model"
+        monkeypatch.setenv("SKILLSPECTOR_MODEL", "operator-model")
+        operator = HostLLMProvider().create_chat_model("operator-model", max_tokens=1024)
+        asyncio.run(operator.ainvoke("p"))
+        assert host.calls[1]["model"] == "operator-model"
     finally:
         reset_host_llm(token)

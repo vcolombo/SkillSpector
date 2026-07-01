@@ -105,6 +105,48 @@ def test_structured_path_raises_clear_error_on_unparseable_response() -> None:
         asyncio.run(structured.ainvoke("prompt"))
 
 
+class _PluginLlmTrustError(Exception):
+    """Stand-in matched by name — the adapter checks type(exc).__name__."""
+
+
+# The adapter matches the exception by type name; give the stand-in the real name.
+_PluginLlmTrustError.__name__ = "PluginLlmTrustError"
+
+
+class _GatedHostLlm(_FakeHostLlm):
+    """Rejects any model override like an un-opted-in host trust gate."""
+
+    async def acomplete_structured(self, *, instructions, input, json_schema, purpose=None, **kw):
+        if kw.get("model"):
+            raise _PluginLlmTrustError("model override not allowed")
+        return await super().acomplete_structured(
+            instructions=instructions, input=input, json_schema=json_schema, purpose=purpose
+        )
+
+
+def test_trust_gate_rejection_retries_without_override() -> None:
+    # Operator set SKILLSPECTOR_MODEL but the host config doesn't allow model
+    # overrides: degrade to the host default model, don't fail the analyzer.
+    host = _GatedHostLlm(parsed={"ok": True, "note": "retried"})
+    structured = PluginLlmChatModel(host, model="operator-model").with_structured_output(_Schema)
+    result = asyncio.run(structured.ainvoke("prompt"))
+    assert result.note == "retried"
+    # Only the successful (override-free) call reached the recording fake.
+    assert len(host.calls) == 1 and "model" not in host.calls[0]
+
+
+def test_non_trust_errors_are_not_retried() -> None:
+    class _BrokenHostLlm(_FakeHostLlm):
+        async def acomplete_structured(self, **kw):
+            raise RuntimeError("provider blew up")
+
+    structured = PluginLlmChatModel(
+        _BrokenHostLlm(), model="operator-model"
+    ).with_structured_output(_Schema)
+    with pytest.raises(RuntimeError, match="provider blew up"):
+        asyncio.run(structured.ainvoke("prompt"))
+
+
 def test_batch_and_stream_fail_loudly() -> None:
     model = PluginLlmChatModel(_FakeHostLlm())
     with pytest.raises(NotImplementedError):
