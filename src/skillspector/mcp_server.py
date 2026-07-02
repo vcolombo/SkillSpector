@@ -32,8 +32,8 @@ from typing import TYPE_CHECKING, Any
 
 from skillspector import __version__
 from skillspector.graph import graph
+from skillspector.llm_utils import is_llm_available
 from skillspector.logging_config import get_logger
-from skillspector.providers import resolve_provider_credentials
 
 if TYPE_CHECKING:
     from mcp.server.fastmcp import FastMCP
@@ -58,8 +58,10 @@ async def run_scan(
     Args:
         target: Git URL, file URL, ``.zip``, ``.md`` file, or local directory.
         use_llm: Whether to request the optional LLM semantic pass on top of
-            static analysis. Honoured only when provider credentials resolve;
-            the returned payload reports what actually happened.
+            static analysis. Honoured only when the active provider is
+            available (API-key credentials, a capable local CLI, or a bound
+            Hermes host LLM); the returned payload reports what actually
+            happened.
         output_format: Format of the embedded ``report`` string. One of
             :data:`VALID_FORMATS`.
         yara_rules_dir: Optional directory of additional YARA rules.
@@ -74,7 +76,7 @@ async def run_scan(
     if output_format not in VALID_FORMATS:
         raise ValueError(f"output_format must be one of {VALID_FORMATS}, got {output_format!r}")
 
-    llm_available = resolve_provider_credentials() is not None
+    llm_available, _ = is_llm_available()
     llm_used = use_llm and llm_available
 
     state: dict[str, Any] = {

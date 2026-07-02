@@ -705,6 +705,57 @@ def test_report_not_degraded_when_some_calls_succeeded(monkeypatch: pytest.Monke
     assert meta["llm_calls_succeeded"] == 1
 
 
+def test_report_partial_failures_surface_per_call_errors(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Any failed LLM call surfaces its node and error in llm_call_errors.
+
+    Without this, a partially-degraded scan (attempted > succeeded) gives the
+    caller no way to learn WHICH analyzer failed or why — observed on a live
+    Hermes host where the handler's log output is swallowed entirely.
+    """
+    monkeypatch.setattr("skillspector.nodes.report.is_llm_available", lambda: (True, None))
+    state: SkillspectorState = {
+        "filtered_findings": [],
+        "component_metadata": [],
+        "has_executable_scripts": False,
+        "manifest": {},
+        "output_format": "json",
+        "use_llm": True,
+        "llm_call_log": [
+            llm_call_record("semantic_security_discovery", ok=True),
+            llm_call_record("semantic_quality_policy", ok=False, error="schema rejected"),
+            llm_call_record("meta_analyzer", ok=False, error=None),
+        ],
+    }
+    meta = _meta_from_json_report(state)
+    assert meta["llm_call_errors"] == [
+        {"node": "semantic_quality_policy", "error": "schema rejected"},
+        {"node": "meta_analyzer", "error": "unknown error"},
+    ]
+
+
+def test_report_all_calls_succeeded_omits_llm_call_errors(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A fully-successful LLM stage carries no llm_call_errors key."""
+    monkeypatch.setattr("skillspector.nodes.report.is_llm_available", lambda: (True, None))
+    state: SkillspectorState = {
+        "filtered_findings": [],
+        "component_metadata": [],
+        "has_executable_scripts": False,
+        "manifest": {},
+        "output_format": "json",
+        "use_llm": True,
+        "llm_call_log": [
+            llm_call_record("semantic_security_discovery", ok=True),
+            llm_call_record("meta_analyzer", ok=True),
+        ],
+    }
+    meta = _meta_from_json_report(state)
+    assert "llm_call_errors" not in meta
+
+
 def test_report_not_degraded_when_no_llm_calls(monkeypatch: pytest.MonkeyPatch) -> None:
     """use_llm True but no LLM calls attempted (e.g. empty skill) -> not degraded."""
     monkeypatch.setattr("skillspector.nodes.report.is_llm_available", lambda: (True, None))

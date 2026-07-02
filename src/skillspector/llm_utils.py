@@ -50,7 +50,15 @@ from skillspector.providers import (
     resolve_chat_model_credentials,
     resolve_provider_credentials,
 )
+from skillspector.providers.host.adapter import PluginLlmChatModel
 from skillspector.providers.openai import OpenAIProvider
+
+
+def is_host_provider(provider: object) -> bool:
+    """Return ``True`` when *provider* is the Hermes host-LLM provider."""
+    from skillspector.providers.host import HostLLMProvider
+
+    return isinstance(provider, HostLLMProvider)
 
 
 def _resolve_llm_credentials() -> tuple[str, str | None]:
@@ -84,11 +92,15 @@ def _resolve_default_chat_model() -> str:
 def is_llm_available() -> tuple[bool, str | None]:
     """Return ``(available, error_message)`` describing LLM availability.
 
-    For CLI providers (``claude_cli``, ``codex_cli``, ``gemini_cli``) the check
-    delegates to the provider's ``is_available()`` method (binary on PATH +
-    auth).  For HTTP providers, it falls back to credential resolution.
+    For the host provider (a Hermes ``ctx.llm`` bound for the current scan)
+    and for CLI providers (``claude_cli``, ``codex_cli``, ``gemini_cli``) the
+    check delegates to the provider's ``is_available()`` method — capability,
+    not credentials, so availability can be ``True`` with no API key present.
+    For HTTP providers, it falls back to credential resolution.
     """
     provider = get_active_provider()
+    if is_host_provider(provider):
+        return provider.is_available()  # type: ignore[attr-defined]
     if has_cli_capability(provider):
         return provider.is_available()  # type: ignore[attr-defined]
     try:
@@ -233,8 +245,14 @@ class AgentCLIChatModel:
         )
 
 
-def get_chat_model(model: str | None = None) -> BaseChatModel | AgentCLIChatModel:
+def get_chat_model(
+    model: str | None = None,
+) -> BaseChatModel | AgentCLIChatModel | PluginLlmChatModel:
     """Return a chat model for the active provider.
+
+    For the host provider (bound Hermes ``ctx.llm``) this returns a
+    :class:`PluginLlmChatModel` adapter backed by the host LLM — no
+    plugin-managed credentials are involved.
 
     For CLI providers (``claude_cli``, ``codex_cli``, ``gemini_cli``) this
     returns an :class:`AgentCLIChatModel` adapter backed by the provider's
@@ -250,6 +268,16 @@ def get_chat_model(model: str | None = None) -> BaseChatModel | AgentCLIChatMode
         ValueError: when an HTTP provider has no API key configured.
     """
     provider = get_active_provider()
+    if is_host_provider(provider):
+        resolved_model = model or provider.resolve_model()
+        host_model = provider.create_plugin_chat_model(
+            resolved_model, max_tokens=get_max_output_tokens(resolved_model), timeout=120
+        )
+        if host_model is None:
+            # is_host_provider() implies a host LLM was bound at selection time;
+            # None here means it was cleared mid-scan, which the plugin never does.
+            raise ValueError("Host LLM provider is active but no host LLM is bound.")
+        return host_model
     if has_cli_capability(provider):
         resolved_model = model or provider.resolve_model()
         return AgentCLIChatModel(provider, resolved_model, get_max_output_tokens(resolved_model))

@@ -33,8 +33,13 @@ Selection happens via the ``SKILLSPECTOR_PROVIDER`` env var:
     antigravity_cli → AntigravityCLIProvider  (local ``agy`` binary; registered
                                                but disabled — agy is TTY-only and
                                                can't be captured; use gemini_cli)
+    auto            → HostLLMProvider         (Hermes host ``ctx.llm``; no
+                                               plugin-managed credentials)
 
-When unset, the selector defaults to ``nv_build``.
+A bound host LLM (set by the Hermes plugin) selects ``HostLLMProvider``
+automatically, ahead of the env var. When unset with no host bound, the
+selector defaults to ``nv_inference`` when that optional subpackage is
+bundled with the installation, else ``nv_build``.
 
 CLI providers (``claude_cli``, ``codex_cli``, ``gemini_cli``) implement the
 optional :class:`~skillspector.providers.base.AgentCLICapable` interface — they
@@ -58,6 +63,7 @@ from .base import (
     ModelMetadataProvider,
     has_cli_capability,
 )
+from .host import HostLLMProvider, get_host_llm
 from .nv_build import NvBuildProvider
 
 NO_LLM_API_KEY_MESSAGE = (
@@ -75,8 +81,15 @@ def raise_no_llm_api_key_configured() -> NoReturn:
 
 def _select_active_provider() -> LLMProvider:
     """Construct the active provider based on ``SKILLSPECTOR_PROVIDER``."""
+    # A bound host LLM (Hermes plugin call) wins over any env selection.
+    if get_host_llm() is not None:
+        return HostLLMProvider()
+
     name = os.environ.get("SKILLSPECTOR_PROVIDER", "").strip().lower()
 
+    if name == "auto":
+        # Explicit opt-in to the host LLM; reports unavailable if none is bound.
+        return HostLLMProvider()
     if name == "openai":
         from .openai import OpenAIProvider
 
@@ -177,10 +190,12 @@ def create_chat_model(
 ) -> BaseChatModel:
     """Create the active provider's native LangChain chat model.
 
-    CLI providers (``claude_cli``, ``codex_cli``, ``gemini_cli``) do not have
-    a native LangChain chat model — callers that need CLI transport should use
+    CLI providers (``claude_cli``, ``codex_cli``, ``gemini_cli``) and the host
+    provider (Hermes ``ctx.llm``) do not have a native LangChain chat model —
+    callers that need those transports should use
     :func:`skillspector.llm_utils.get_chat_model` instead (which returns an
-    :class:`~skillspector.llm_utils.AgentCLIChatModel` adapter).
+    :class:`~skillspector.llm_utils.AgentCLIChatModel` or
+    ``PluginLlmChatModel`` adapter).
 
     If the active provider is not configured, fall back to standard OpenAI
     environment variables. This preserves the historical ``OPENAI_API_KEY``
@@ -188,8 +203,10 @@ def create_chat_model(
     """
     provider = _select_active_provider()
 
-    # CLI providers don't participate in the create_chat_model path.
-    if not has_cli_capability(provider):
+    # CLI and host providers don't participate in the create_chat_model path:
+    # their adapters aren't BaseChatModel instances, so returning them here
+    # would violate this function's declared return type.
+    if not has_cli_capability(provider) and not isinstance(provider, HostLLMProvider):
         llm = provider.create_chat_model(model, max_tokens=max_tokens, timeout=timeout)
         if llm is not None:
             return llm
